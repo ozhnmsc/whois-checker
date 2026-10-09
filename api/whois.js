@@ -129,13 +129,16 @@ export default async function handler(req, res) {
   const domain = normalize(req.query.domain);
   if (!domain) return res.status(400).json({ error: "Invalid domain" });
 
+  // Stamped when the registry is actually queried, so cached responses keep
+  // their original time (useful as an audit trail).
+  const queriedAt = new Date().toISOString();
   try {
     let result = null;
     try { result = await viaRdap(domain); } catch { /* fall through */ }
     if (!result) result = await viaWhois(domain);
     res.setHeader("Cache-Control", "s-maxage=3600");
-    return res.status(200).json(result);
+    return res.status(200).json({ ...result, queriedAt });
   } catch (e) {
-    return res.status(200).json({ domain, error: e.message });
+    return res.status(200).json({ domain, error: e.message, queriedAt });
   }
 }

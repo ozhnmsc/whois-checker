@@ -14,7 +14,7 @@
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--text);
          font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width:1100px; margin:0 auto; padding:32px 16px; }
+  main { max-width:1280px; margin:0 auto; padding:32px 16px; }
   header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
   h1 { font-size:22px; margin:0 0 4px; }
   .lang { display:flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; flex-shrink:0; }
@@ -42,6 +42,7 @@
        cursor:pointer; user-select:none; }
   tr:last-child td { border-bottom:none; }
   td.num { font-variant-numeric: tabular-nums; }
+  td.clip { max-width:240px; overflow:hidden; text-overflow:ellipsis; }
   .pill { font-size:12px; padding:2px 8px; border-radius:99px; border:1px solid currentColor; }
   .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .muted { color:var(--muted); }
   .empty { padding:28px; text-align:center; color:var(--muted); }
@@ -76,8 +77,9 @@
         <th data-k="left" data-i18n="th_left">Days left</th>
         <th data-k="registrar" data-i18n="th_registrar">Registrar</th>
         <th data-k="source" data-i18n="th_source">Source</th>
+        <th data-k="checked" data-i18n="th_checked">Checked at</th>
       </tr></thead>
-      <tbody id="rows"><tr><td colspan="8" class="empty">No results yet.</td></tr></tbody>
+      <tbody id="rows"><tr><td colspan="9" class="empty">No results yet.</td></tr></tbody>
     </table>
   </div>
   <div class="bar bottom">
@@ -102,12 +104,13 @@ const STRINGS = {
       organization that runs the extension. Lookups use <a href="https://www.icann.org/rdap" target="_blank" rel="noopener">RDAP</a>, the official successor to
       WHOIS, with the right server found through IANA's public list. Extensions without RDAP, such as
       .tr (TRABİS), are queried over classic WHOIS instead. The Source column shows which method answered.
-      Results may be cached for up to an hour.`,
+      Results may be cached for up to an hour; "Checked at" always shows when the registry
+      actually answered, in your local time (UTC in CSV).`,
     count: (n, max) => `${n} / ${max} domains`,
     tooMany: (n, max) => `${n} domains: the limit is ${max} per check`,
     xlsxFailed: "Excel export could not be loaded. Try again or use CSV.",
     th_domain: "Domain", th_state: "Status", th_created: "Registered", th_age: "Age",
-    th_expires: "Expires", th_left: "Days left", th_registrar: "Registrar", th_source: "Source",
+    th_expires: "Expires", th_left: "Days left", th_registrar: "Registrar", th_source: "Source", th_checked: "Checked at",
     empty: "No results yet.",
     registered: "Registered", available: "Not registered", error: "Error",
     yrs: "yrs",
@@ -124,12 +127,13 @@ const STRINGS = {
       (uzantıyı yöneten kuruluş) alınır. Sorgular, WHOIS'in resmî halefi olan <a href="https://www.icann.org/rdap" target="_blank" rel="noopener">RDAP</a> ile
       yapılır; doğru sunucu IANA'nın herkese açık listesinden bulunur. RDAP desteği olmayan uzantılar,
       örneğin .tr (TRABİS), klasik WHOIS ile sorgulanır. Hangi yöntemin kullanıldığı Kaynak sütununda
-      görünür. Sonuçlar en fazla bir saat önbellekte tutulabilir.`,
+      görünür. Sonuçlar en fazla bir saat önbellekte tutulabilir; "Sorgu zamanı" her zaman kayıt
+      otoritesinin gerçekten yanıt verdiği anı yerel saatinizle gösterir (CSV'de UTC).`,
     count: (n, max) => `${n} / ${max} alan adı`,
     tooMany: (n, max) => `${n} alan adı: tek seferde en fazla ${max} kontrol edilebilir`,
     xlsxFailed: "Excel dışa aktarma yüklenemedi. Tekrar deneyin ya da CSV kullanın.",
     th_domain: "Alan adı", th_state: "Durum", th_created: "Kayıt tarihi", th_age: "Yaş",
-    th_expires: "Bitiş tarihi", th_left: "Kalan gün", th_registrar: "Kayıt şirketi", th_source: "Kaynak",
+    th_expires: "Bitiş tarihi", th_left: "Kalan gün", th_registrar: "Kayıt şirketi", th_source: "Kaynak", th_checked: "Sorgu zamanı",
     empty: "Henüz sonuç yok.",
     registered: "Kayıtlı", available: "Kayıtlı değil", error: "Hata",
     yrs: "yıl",
@@ -175,6 +179,16 @@ function parseDate(s) {
   return isNaN(d) ? null : d;
 }
 const fmt = (d) => d ? d.toISOString().slice(0, 10) : "—";
+const pad = (n) => String(n).padStart(2, "0");
+// Local date and time, e.g. 2026-10-09 10:45:12
+const fmtTime = (d) => d
+  ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  : "—";
+// Viewer's UTC offset, e.g. UTC+03:00
+function utcOffset(d = new Date()) {
+  const m = -d.getTimezoneOffset(), a = Math.abs(m);
+  return `UTC${m < 0 ? "-" : "+"}${pad(Math.floor(a / 60))}:${pad(a % 60)}`;
+}
 const dayMs = 86400000;
 
 function enrich(r) {
@@ -182,7 +196,7 @@ function enrich(r) {
   const now = Date.now();
   return {
     ...r,
-    createdD: c, expiresD: e,
+    createdD: c, expiresD: e, checkedD: parseDate(r.queriedAt),
     age: c ? (now - c) / dayMs / 365.25 : null,
     left: e ? Math.floor((e - now) / dayMs) : null,
     state: r.error ? "error" : r.registered === false ? "available" : "registered",
@@ -208,10 +222,11 @@ function render() {
       <td class="num">${r.age != null ? r.age.toLocaleString(lang, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " " + t("yrs") : "—"}</td>
       <td class="num">${fmt(r.expiresD)}</td>
       <td class="num ${leftCls}">${r.left ?? "—"}</td>
-      <td>${esc(r.registrar || "—")}</td>
-      <td class="muted">${esc(r.source || "")}</td>
+      <td class="clip" title="${esc(r.registrar)}">${esc(r.registrar || "—")}</td>
+      <td class="muted" title="${esc(r.source)}">${esc((r.source || "").split(" ")[0])}</td>
+      <td class="num muted" title="${esc(r.queriedAt)}">${fmtTime(r.checkedD)}</td>
     </tr>`;
-  }).join("") : `<tr><td colspan="8" class="empty">${t("empty")}</td></tr>`;
+  }).join("") : `<tr><td colspan="9" class="empty">${t("empty")}</td></tr>`;
 }
 
 function esc(s) {
@@ -223,7 +238,7 @@ async function check(domain) {
     const r = await fetch("/api/whois?domain=" + encodeURIComponent(domain));
     return enrich(await r.json());
   } catch (e) {
-    return enrich({ domain, error: e.message });
+    return enrich({ domain, error: e.message, queriedAt: new Date().toISOString() });
   }
 }
 
@@ -271,10 +286,10 @@ document.querySelectorAll("th").forEach((th) => th.onclick = () => {
 });
 
 $("csv").onclick = () => {
-  const head = ["domain","status","registered","expires","days_left","registrar","source","error"];
+  const head = ["domain","status","registered","expires","days_left","registrar","source","checked_at_utc","error"];
   const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const lines = [head.join(",")].concat(results.map((r) => [
-    r.domain, r.state, fmt(r.createdD), fmt(r.expiresD), r.left, r.registrar, r.source, r.error
+    r.domain, r.state, fmt(r.createdD), fmt(r.expiresD), r.left, r.registrar, r.source, r.queriedAt, r.error
   ].map(q).join(",")));
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
@@ -298,19 +313,25 @@ const excelDate = (d) => d
   ? { t: "n", v: (Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(1899, 11, 30)) / dayMs,
       z: "yyyy-mm-dd" }
   : null;
+// Excel date-time serial for the viewer's local time.
+const excelDateTime = (d) => d
+  ? { t: "n", v: (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds())
+        - Date.UTC(1899, 11, 30)) / dayMs, z: "yyyy-mm-dd hh:mm:ss" }
+  : null;
 
 $("xlsx").onclick = async () => {
   let XLSX;
   try { XLSX = await loadXlsx(); } catch { $("progress").textContent = t("xlsxFailed"); return; }
-  const keys = ["domain", "state", "created", "age", "expires", "left", "registrar", "source"];
+  const keys = ["domain", "state", "created", "age", "expires", "left", "registrar", "source", "checked"];
   const rows = results.map((r) => [
     r.domain, t(r.state), excelDate(r.createdD),
     r.age != null ? Math.round(r.age * 10) / 10 : null,
-    excelDate(r.expiresD), r.left, r.registrar || null, r.source || null, r.error || null,
+    excelDate(r.expiresD), r.left, r.registrar || null, r.source || null,
+    excelDateTime(r.checkedD), r.error || null,
   ]);
-  const head = keys.map((k) => t("th_" + k)).concat(t("error"));
+  const head = keys.map((k) => t("th_" + k) + (k === "checked" ? ` (${utcOffset()})` : "")).concat(t("error"));
   const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
-  ws["!cols"] = [28, 14, 12, 8, 12, 10, 34, 26, 30].map((wch) => ({ wch }));
+  ws["!cols"] = [28, 14, 12, 8, 12, 10, 34, 26, 26, 30].map((wch) => ({ wch }));
   ws["!autofilter"] = { ref: ws["!ref"] };
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, t("sheet"));
