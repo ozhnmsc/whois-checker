@@ -30,7 +30,9 @@
            background:var(--accent); color:var(--bg); font-weight:600; cursor:pointer; }
   button.secondary { background:transparent; color:var(--accent); }
   button:disabled { opacity:.5; cursor:default; }
-  #progress { color:var(--muted); font-size:13px; }
+  #progress, #count { color:var(--muted); font-size:13px; }
+  #count.over { color:var(--bad); font-weight:600; }
+  .bar.bottom { margin:12px 0 0; }
   .wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:8px; }
   table { width:100%; border-collapse:collapse; font-size:13.5px; }
   th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
@@ -57,7 +59,7 @@
   <textarea id="input" placeholder="example.com&#10;google.com&#10;mysite.com.tr"></textarea>
   <div class="bar">
     <button id="run" data-i18n="run">Check domains</button>
-    <button id="csv" class="secondary" data-i18n="csv" disabled>Download CSV</button>
+    <span id="count"></span>
     <span id="progress"></span>
   </div>
 
@@ -76,6 +78,10 @@
       <tbody id="rows"><tr><td colspan="8" class="empty">No results yet.</td></tr></tbody>
     </table>
   </div>
+  <div class="bar bottom">
+    <button id="xlsx" class="secondary" data-i18n="xlsx" disabled>Download Excel</button>
+    <button id="csv" class="secondary" data-i18n="csv" disabled>Download CSV</button>
+  </div>
 </main>
 
 <script>
@@ -86,7 +92,11 @@ const STRINGS = {
     pageTitle: "Domain Date Checker",
     title: "Domain Date Checker",
     sub: "Paste domains (one per line, or separated by commas/spaces). Shows registration and expiry dates via RDAP, with WHOIS fallback.",
-    run: "Check domains", csv: "Download CSV",
+    run: "Check domains", csv: "Download CSV", xlsx: "Download Excel",
+    sheet: "Domains",
+    count: (n, max) => `${n} / ${max} domains`,
+    tooMany: (n, max) => `${n} domains: the limit is ${max} per check`,
+    xlsxFailed: "Excel export could not be loaded. Try again or use CSV.",
     th_domain: "Domain", th_state: "Status", th_created: "Registered", th_age: "Age",
     th_expires: "Expires", th_left: "Days left", th_registrar: "Registrar", th_source: "Source",
     empty: "No results yet.",
@@ -99,7 +109,11 @@ const STRINGS = {
     pageTitle: "Alan Adı Tarih Kontrolü",
     title: "Alan Adı Tarih Kontrolü",
     sub: "Alan adlarını yapıştırın (her satıra bir tane ya da virgül/boşlukla ayırarak). Kayıt ve bitiş tarihleri RDAP ile, gerekirse WHOIS ile sorgulanır.",
-    run: "Alan adlarını kontrol et", csv: "CSV indir",
+    run: "Alan adlarını kontrol et", csv: "CSV indir", xlsx: "Excel indir",
+    sheet: "Alan adları",
+    count: (n, max) => `${n} / ${max} alan adı`,
+    tooMany: (n, max) => `${n} alan adı: tek seferde en fazla ${max} kontrol edilebilir`,
+    xlsxFailed: "Excel dışa aktarma yüklenemedi. Tekrar deneyin ya da CSV kullanın.",
     th_domain: "Alan adı", th_state: "Durum", th_created: "Kayıt tarihi", th_age: "Yaş",
     th_expires: "Bitiş tarihi", th_left: "Kalan gün", th_registrar: "Kayıt şirketi", th_source: "Kaynak",
     empty: "Henüz sonuç yok.",
@@ -125,6 +139,7 @@ function applyLang() {
   document.querySelectorAll(".lang button").forEach((b) =>
     b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
   $("progress").textContent = progress ? t(...progress) : "";
+  updateCount();
   render();
 }
 
@@ -197,11 +212,28 @@ async function check(domain) {
   }
 }
 
+// Keeps each run short and avoids tripping registry rate limits.
+const MAX_DOMAINS = 50;
+let running = false;
+
+const getList = () =>
+  [...new Set($("input").value.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean))];
+
+function updateCount() {
+  const n = getList().length, over = n > MAX_DOMAINS;
+  $("count").textContent = n ? t(over ? "tooMany" : "count", n, MAX_DOMAINS) : "";
+  $("count").classList.toggle("over", over);
+  $("run").disabled = running || over;
+}
+$("input").addEventListener("input", updateCount);
+
+function setExportsDisabled(v) { $("csv").disabled = v; $("xlsx").disabled = v; }
+
 $("run").onclick = async () => {
-  const list = [...new Set($("input").value.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean))];
-  if (!list.length) return;
+  const list = getList();
+  if (!list.length || list.length > MAX_DOMAINS) return;
   results = []; render();
-  $("run").disabled = true; $("csv").disabled = true;
+  running = true; $("run").disabled = true; setExportsDisabled(true);
 
   let done = 0, i = 0;
   const worker = async () => {
@@ -214,7 +246,7 @@ $("run").onclick = async () => {
   };
   await Promise.all(Array.from({ length: Math.min(4, list.length) }, worker));
 
-  $("run").disabled = false; $("csv").disabled = !results.length;
+  running = false; updateCount(); setExportsDisabled(!results.length);
   setProgress("done", results.length);
 };
 
@@ -232,6 +264,42 @@ $("csv").onclick = () => {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
   a.download = "domain-dates.csv"; a.click();
+};
+
+// SheetJS is only loaded when someone actually exports to Excel.
+let xlsxLib = null;
+function loadXlsx() {
+  return xlsxLib ??= new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.mini.min.js";
+    s.onload = () => resolve(window.XLSX);
+    s.onerror = () => { xlsxLib = null; reject(new Error("load failed")); };
+    document.head.appendChild(s);
+  });
+}
+
+// Excel date serial (days since 1899-12-30) for the UTC calendar day, as a whole number.
+const excelDate = (d) => d
+  ? { t: "n", v: (Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(1899, 11, 30)) / dayMs,
+      z: "yyyy-mm-dd" }
+  : null;
+
+$("xlsx").onclick = async () => {
+  let XLSX;
+  try { XLSX = await loadXlsx(); } catch { $("progress").textContent = t("xlsxFailed"); return; }
+  const keys = ["domain", "state", "created", "age", "expires", "left", "registrar", "source"];
+  const rows = results.map((r) => [
+    r.domain, t(r.state), excelDate(r.createdD),
+    r.age != null ? Math.round(r.age * 10) / 10 : null,
+    excelDate(r.expiresD), r.left, r.registrar || null, r.source || null, r.error || null,
+  ]);
+  const head = keys.map((k) => t("th_" + k)).concat(t("error"));
+  const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
+  ws["!cols"] = [28, 14, 12, 8, 12, 10, 34, 26, 30].map((wch) => ({ wch }));
+  ws["!autofilter"] = { ref: ws["!ref"] };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, t("sheet"));
+  XLSX.writeFile(wb, "domain-dates.xlsx");
 };
 
 applyLang();
