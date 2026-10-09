@@ -15,7 +15,12 @@
   body { margin:0; background:var(--bg); color:var(--text);
          font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
   main { max-width:1100px; margin:0 auto; padding:32px 16px; }
+  header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
   h1 { font-size:22px; margin:0 0 4px; }
+  .lang { display:flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; flex-shrink:0; }
+  .lang button { padding:4px 10px; border:none; border-radius:0; background:transparent;
+                 color:var(--muted); font-size:12px; }
+  .lang button[aria-pressed="true"] { background:var(--accent); color:var(--bg); }
   p.sub { color:var(--muted); margin:0 0 20px; }
   textarea { width:100%; min-height:140px; padding:12px; border:1px solid var(--line);
              border-radius:8px; background:var(--card); color:var(--text);
@@ -40,27 +45,33 @@
 </head>
 <body>
 <main>
-  <h1>Domain Date Checker</h1>
-  <p class="sub">Paste domains (one per line, or separated by commas/spaces). Shows registration and expiry dates via RDAP, with WHOIS fallback.</p>
+  <header>
+    <h1 data-i18n="title">Domain Date Checker</h1>
+    <div class="lang" role="group" aria-label="Language">
+      <button data-lang="en" aria-pressed="true">EN</button>
+      <button data-lang="tr" aria-pressed="false">TR</button>
+    </div>
+  </header>
+  <p class="sub" data-i18n="sub">Paste domains (one per line, or separated by commas/spaces). Shows registration and expiry dates via RDAP, with WHOIS fallback.</p>
 
   <textarea id="input" placeholder="example.com&#10;google.com&#10;mysite.com.tr"></textarea>
   <div class="bar">
-    <button id="run">Check domains</button>
-    <button id="csv" class="secondary" disabled>Download CSV</button>
+    <button id="run" data-i18n="run">Check domains</button>
+    <button id="csv" class="secondary" data-i18n="csv" disabled>Download CSV</button>
     <span id="progress"></span>
   </div>
 
   <div class="wrap">
     <table>
       <thead><tr>
-        <th data-k="domain">Domain</th>
-        <th data-k="state">Status</th>
-        <th data-k="created">Registered</th>
-        <th data-k="age">Age</th>
-        <th data-k="expires">Expires</th>
-        <th data-k="left">Days left</th>
-        <th data-k="registrar">Registrar</th>
-        <th data-k="source">Source</th>
+        <th data-k="domain" data-i18n="th_domain">Domain</th>
+        <th data-k="state" data-i18n="th_state">Status</th>
+        <th data-k="created" data-i18n="th_created">Registered</th>
+        <th data-k="age" data-i18n="th_age">Age</th>
+        <th data-k="expires" data-i18n="th_expires">Expires</th>
+        <th data-k="left" data-i18n="th_left">Days left</th>
+        <th data-k="registrar" data-i18n="th_registrar">Registrar</th>
+        <th data-k="source" data-i18n="th_source">Source</th>
       </tr></thead>
       <tbody id="rows"><tr><td colspan="8" class="empty">No results yet.</td></tr></tbody>
     </table>
@@ -69,6 +80,62 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
+
+const STRINGS = {
+  en: {
+    pageTitle: "Domain Date Checker",
+    title: "Domain Date Checker",
+    sub: "Paste domains (one per line, or separated by commas/spaces). Shows registration and expiry dates via RDAP, with WHOIS fallback.",
+    run: "Check domains", csv: "Download CSV",
+    th_domain: "Domain", th_state: "Status", th_created: "Registered", th_age: "Age",
+    th_expires: "Expires", th_left: "Days left", th_registrar: "Registrar", th_source: "Source",
+    empty: "No results yet.",
+    registered: "Registered", available: "Not registered", error: "Error",
+    yrs: "yrs",
+    progress: (d, n) => `${d} / ${n} checked`,
+    done: (n) => `Done: ${n} domains`,
+  },
+  tr: {
+    pageTitle: "Alan Adı Tarih Kontrolü",
+    title: "Alan Adı Tarih Kontrolü",
+    sub: "Alan adlarını yapıştırın (her satıra bir tane ya da virgül/boşlukla ayırarak). Kayıt ve bitiş tarihleri RDAP ile, gerekirse WHOIS ile sorgulanır.",
+    run: "Alan adlarını kontrol et", csv: "CSV indir",
+    th_domain: "Alan adı", th_state: "Durum", th_created: "Kayıt tarihi", th_age: "Yaş",
+    th_expires: "Bitiş tarihi", th_left: "Kalan gün", th_registrar: "Kayıt şirketi", th_source: "Kaynak",
+    empty: "Henüz sonuç yok.",
+    registered: "Kayıtlı", available: "Kayıtlı değil", error: "Hata",
+    yrs: "yıl",
+    progress: (d, n) => `${d} / ${n} kontrol edildi`,
+    done: (n) => `Tamamlandı: ${n} alan adı`,
+  },
+};
+
+function initialLang() {
+  try { const saved = localStorage.getItem("lang"); if (STRINGS[saved]) return saved; } catch {}
+  return (navigator.language || "").toLowerCase().startsWith("tr") ? "tr" : "en";
+}
+let lang = initialLang();
+const t = (k, ...a) => { const v = STRINGS[lang][k]; return typeof v === "function" ? v(...a) : v; };
+let progress = null; // ["progress", done, total] or ["done", n]
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.title = t("pageTitle");
+  document.querySelectorAll("[data-i18n]").forEach((el) => el.textContent = t(el.dataset.i18n));
+  document.querySelectorAll(".lang button").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  $("progress").textContent = progress ? t(...progress) : "";
+  render();
+}
+
+document.querySelectorAll(".lang button").forEach((b) => b.onclick = () => {
+  lang = b.dataset.lang;
+  try { localStorage.setItem("lang", lang); } catch {}
+  applyLang();
+});
+
+function setProgress(...p) { progress = p; $("progress").textContent = t(...p); }
+
 let results = [];
 let sortKey = null, sortDir = 1;
 
@@ -100,21 +167,21 @@ function render() {
     return (va > vb ? 1 : va < vb ? -1 : 0) * sortDir;
   });
   $("rows").innerHTML = rows.length ? rows.map((r) => {
-    const st = r.state === "registered" ? '<span class="pill ok">Registered</span>'
-             : r.state === "available" ? '<span class="pill warn">Not registered</span>'
-             : `<span class="pill bad" title="${esc(r.error)}">Error</span>`;
+    const st = r.state === "registered" ? `<span class="pill ok">${t("registered")}</span>`
+             : r.state === "available" ? `<span class="pill warn">${t("available")}</span>`
+             : `<span class="pill bad" title="${esc(r.error)}">${t("error")}</span>`;
     const leftCls = r.left == null ? "muted" : r.left < 30 ? "bad" : r.left < 90 ? "warn" : "";
     return `<tr>
       <td><strong>${esc(r.domain)}</strong></td>
       <td>${st}</td>
       <td class="num">${fmt(r.createdD)}</td>
-      <td class="num">${r.age != null ? r.age.toFixed(1) + " yrs" : "—"}</td>
+      <td class="num">${r.age != null ? r.age.toLocaleString(lang, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " " + t("yrs") : "—"}</td>
       <td class="num">${fmt(r.expiresD)}</td>
       <td class="num ${leftCls}">${r.left ?? "—"}</td>
       <td>${esc(r.registrar || "—")}</td>
       <td class="muted">${esc(r.source || "")}</td>
     </tr>`;
-  }).join("") : '<tr><td colspan="8" class="empty">No results yet.</td></tr>';
+  }).join("") : `<tr><td colspan="8" class="empty">${t("empty")}</td></tr>`;
 }
 
 function esc(s) {
@@ -141,14 +208,14 @@ $("run").onclick = async () => {
     while (i < list.length) {
       const d = list[i++];
       results.push(await check(d));
-      done++; $("progress").textContent = `${done} / ${list.length} checked`;
+      done++; setProgress("progress", done, list.length);
       render();
     }
   };
   await Promise.all(Array.from({ length: Math.min(4, list.length) }, worker));
 
   $("run").disabled = false; $("csv").disabled = !results.length;
-  $("progress").textContent = `Done: ${results.length} domains`;
+  setProgress("done", results.length);
 };
 
 document.querySelectorAll("th").forEach((th) => th.onclick = () => {
@@ -166,6 +233,8 @@ $("csv").onclick = () => {
   a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
   a.download = "domain-dates.csv"; a.click();
 };
+
+applyLang();
 </script>
 </body>
 </html>
