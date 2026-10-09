@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Domain Date Checker</title>
+<style>
+  :root { --bg:#f7f7f5; --card:#fff; --text:#1c1c1a; --muted:#6b6b66; --line:#e4e4df;
+          --accent:#2f5d50; --warn:#b4541a; --bad:#a32020; --ok:#2f7a3f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141413; --card:#1e1e1c; --text:#ecebe6; --muted:#9a9993; --line:#33332f;
+            --accent:#7fb8a6; --warn:#e39a5a; --bad:#e57373; --ok:#7cc48a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:32px 16px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 20px; }
+  textarea { width:100%; min-height:140px; padding:12px; border:1px solid var(--line);
+             border-radius:8px; background:var(--card); color:var(--text);
+             font:13px/1.5 ui-monospace, Menlo, Consolas, monospace; resize:vertical; }
+  .bar { display:flex; gap:8px; align-items:center; margin:12px 0 20px; flex-wrap:wrap; }
+  button { padding:8px 16px; border-radius:6px; border:1px solid var(--accent);
+           background:var(--accent); color:var(--bg); font-weight:600; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--accent); }
+  button:disabled { opacity:.5; cursor:default; }
+  #progress { color:var(--muted); font-size:13px; }
+  .wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:8px; }
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em;
+       cursor:pointer; user-select:none; }
+  tr:last-child td { border-bottom:none; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .pill { font-size:12px; padding:2px 8px; border-radius:99px; border:1px solid currentColor; }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .muted { color:var(--muted); }
+  .empty { padding:28px; text-align:center; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Domain Date Checker</h1>
+  <p class="sub">Paste domains (one per line, or separated by commas/spaces). Shows registration and expiry dates via RDAP, with WHOIS fallback.</p>
+
+  <textarea id="input" placeholder="example.com&#10;google.com&#10;mysite.com.tr"></textarea>
+  <div class="bar">
+    <button id="run">Check domains</button>
+    <button id="csv" class="secondary" disabled>Download CSV</button>
+    <span id="progress"></span>
+  </div>
+
+  <div class="wrap">
+    <table>
+      <thead><tr>
+        <th data-k="domain">Domain</th>
+        <th data-k="state">Status</th>
+        <th data-k="created">Registered</th>
+        <th data-k="age">Age</th>
+        <th data-k="expires">Expires</th>
+        <th data-k="left">Days left</th>
+        <th data-k="registrar">Registrar</th>
+        <th data-k="source">Source</th>
+      </tr></thead>
+      <tbody id="rows"><tr><td colspan="8" class="empty">No results yet.</td></tr></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let results = [];
+let sortKey = null, sortDir = 1;
+
+function parseDate(s) {
+  if (!s) return null;
+  const d = new Date(String(s).replace(/\s*\(.*\)$/, "").trim());
+  return isNaN(d) ? null : d;
+}
+const fmt = (d) => d ? d.toISOString().slice(0, 10) : "—";
+const dayMs = 86400000;
+
+function enrich(r) {
+  const c = parseDate(r.created), e = parseDate(r.expires);
+  const now = Date.now();
+  return {
+    ...r,
+    createdD: c, expiresD: e,
+    age: c ? (now - c) / dayMs / 365.25 : null,
+    left: e ? Math.floor((e - now) / dayMs) : null,
+    state: r.error ? "error" : r.registered === false ? "available" : "registered",
+  };
+}
+
+function render() {
+  const rows = [...results];
+  if (sortKey) rows.sort((a, b) => {
+    const va = a[sortKey + "D"] ?? a[sortKey], vb = b[sortKey + "D"] ?? b[sortKey];
+    if (va == null) return 1; if (vb == null) return -1;
+    return (va > vb ? 1 : va < vb ? -1 : 0) * sortDir;
+  });
+  $("rows").innerHTML = rows.length ? rows.map((r) => {
+    const st = r.state === "registered" ? '<span class="pill ok">Registered</span>'
+             : r.state === "available" ? '<span class="pill warn">Not registered</span>'
+             : `<span class="pill bad" title="${esc(r.error)}">Error</span>`;
+    const leftCls = r.left == null ? "muted" : r.left < 30 ? "bad" : r.left < 90 ? "warn" : "";
+    return `<tr>
+      <td><strong>${esc(r.domain)}</strong></td>
+      <td>${st}</td>
+      <td class="num">${fmt(r.createdD)}</td>
+      <td class="num">${r.age != null ? r.age.toFixed(1) + " yrs" : "—"}</td>
+      <td class="num">${fmt(r.expiresD)}</td>
+      <td class="num ${leftCls}">${r.left ?? "—"}</td>
+      <td>${esc(r.registrar || "—")}</td>
+      <td class="muted">${esc(r.source || "")}</td>
+    </tr>`;
+  }).join("") : '<tr><td colspan="8" class="empty">No results yet.</td></tr>';
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+}
+
+async function check(domain) {
+  try {
+    const r = await fetch("/api/whois?domain=" + encodeURIComponent(domain));
+    return enrich(await r.json());
+  } catch (e) {
+    return enrich({ domain, error: e.message });
+  }
+}
+
+$("run").onclick = async () => {
+  const list = [...new Set($("input").value.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean))];
+  if (!list.length) return;
+  results = []; render();
+  $("run").disabled = true; $("csv").disabled = true;
+
+  let done = 0, i = 0;
+  const worker = async () => {
+    while (i < list.length) {
+      const d = list[i++];
+      results.push(await check(d));
+      done++; $("progress").textContent = `${done} / ${list.length} checked`;
+      render();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, list.length) }, worker));
+
+  $("run").disabled = false; $("csv").disabled = !results.length;
+  $("progress").textContent = `Done: ${results.length} domains`;
+};
+
+document.querySelectorAll("th").forEach((th) => th.onclick = () => {
+  const k = th.dataset.k;
+  sortDir = sortKey === k ? -sortDir : 1; sortKey = k; render();
+});
+
+$("csv").onclick = () => {
+  const head = ["domain","status","registered","expires","days_left","registrar","source","error"];
+  const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = [head.join(",")].concat(results.map((r) => [
+    r.domain, r.state, fmt(r.createdD), fmt(r.expiresD), r.left, r.registrar, r.source, r.error
+  ].map(q).join(",")));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
+  a.download = "domain-dates.csv"; a.click();
+};
+</script>
+</body>
+</html>
