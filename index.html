@@ -29,6 +29,8 @@
   .seg button { padding:4px 10px; border:none; border-radius:0; background:transparent;
                 color:var(--muted); font-size:12px; }
   .seg button[aria-pressed="true"] { background:var(--accent); color:var(--bg); }
+  .theme button { display:flex; align-items:center; padding:4px 9px; }
+  .seg button:not([aria-pressed="true"]):hover { color:var(--text); }
   p.sub { color:var(--muted); margin:0 0 20px; }
   textarea { width:100%; min-height:140px; padding:12px; border:1px solid var(--line);
              border-radius:8px; background:var(--card); color:var(--text);
@@ -62,8 +64,12 @@
     <h1 data-i18n="title">Domain Date Checker</h1>
     <div class="controls">
       <div class="seg theme" role="group" aria-label="Theme">
-        <button data-theme="light" aria-pressed="false">☀</button>
-        <button data-theme="dark" aria-pressed="false">☾</button>
+        <button data-theme="light" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        </button>
+        <button data-theme="dark" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
+        </button>
       </div>
       <div class="seg lang" role="group" aria-label="Language">
         <button data-lang="en" aria-pressed="true">EN</button>
