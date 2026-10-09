@@ -4,23 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Domain Date Checker</title>
+<script>
+  // Apply a saved theme before the page paints, so there is no flash of the wrong colors.
+  try { const th = localStorage.getItem("theme"); if (th === "light" || th === "dark") document.documentElement.dataset.theme = th; } catch {}
+</script>
 <style>
+  /* Light by default; dark follows the system unless the visitor picked a theme. */
   :root { --bg:#f7f7f5; --card:#fff; --text:#1c1c1a; --muted:#6b6b66; --line:#e4e4df;
-          --accent:#2f5d50; --warn:#b4541a; --bad:#a32020; --ok:#2f7a3f; }
+          --accent:#2f5d50; --warn:#b4541a; --bad:#a32020; --ok:#2f7a3f; color-scheme:light; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#141413; --card:#1e1e1c; --text:#ecebe6; --muted:#9a9993; --line:#33332f;
-            --accent:#7fb8a6; --warn:#e39a5a; --bad:#e57373; --ok:#7cc48a; }
+    :root:not([data-theme="light"]) { --bg:#141413; --card:#1e1e1c; --text:#ecebe6; --muted:#9a9993; --line:#33332f;
+            --accent:#7fb8a6; --warn:#e39a5a; --bad:#e57373; --ok:#7cc48a; color-scheme:dark; }
   }
+  :root[data-theme="dark"] { --bg:#141413; --card:#1e1e1c; --text:#ecebe6; --muted:#9a9993; --line:#33332f;
+          --accent:#7fb8a6; --warn:#e39a5a; --bad:#e57373; --ok:#7cc48a; color-scheme:dark; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--text);
          font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
   main { max-width:1280px; margin:0 auto; padding:32px 16px; }
   header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
   h1 { font-size:22px; margin:0 0 4px; }
-  .lang { display:flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; flex-shrink:0; }
-  .lang button { padding:4px 10px; border:none; border-radius:0; background:transparent;
-                 color:var(--muted); font-size:12px; }
-  .lang button[aria-pressed="true"] { background:var(--accent); color:var(--bg); }
+  .controls { display:flex; gap:8px; flex-shrink:0; }
+  .seg { display:flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+  .seg button { padding:4px 10px; border:none; border-radius:0; background:transparent;
+                color:var(--muted); font-size:12px; }
+  .seg button[aria-pressed="true"] { background:var(--accent); color:var(--bg); }
   p.sub { color:var(--muted); margin:0 0 20px; }
   textarea { width:100%; min-height:140px; padding:12px; border:1px solid var(--line);
              border-radius:8px; background:var(--card); color:var(--text);
@@ -52,9 +60,15 @@
 <main>
   <header>
     <h1 data-i18n="title">Domain Date Checker</h1>
-    <div class="lang" role="group" aria-label="Language">
-      <button data-lang="en" aria-pressed="true">EN</button>
-      <button data-lang="tr" aria-pressed="false">TR</button>
+    <div class="controls">
+      <div class="seg theme" role="group" aria-label="Theme">
+        <button data-theme="light" aria-pressed="false">☀</button>
+        <button data-theme="dark" aria-pressed="false">☾</button>
+      </div>
+      <div class="seg lang" role="group" aria-label="Language">
+        <button data-lang="en" aria-pressed="true">EN</button>
+        <button data-lang="tr" aria-pressed="false">TR</button>
+      </div>
     </div>
   </header>
   <p class="sub" data-i18n="sub">Paste domains (one per line, or separated by commas/spaces). Shows registration and expiry dates via RDAP, with WHOIS fallback.</p>
@@ -100,6 +114,7 @@ const STRINGS = {
     sub: "Paste domains (one per line, or separated by commas/spaces). Shows registration and expiry dates via RDAP, with WHOIS fallback.",
     run: "Check domains", csv: "Download CSV", xlsx: "Download Excel",
     sheet: "Domains",
+    themeGroup: "Theme", light: "Light mode", dark: "Dark mode", langGroup: "Language",
     about: `<strong>About the data:</strong> dates come directly from each domain's registry, the
       organization that runs the extension. Lookups use <a href="https://www.icann.org/rdap" target="_blank" rel="noopener">RDAP</a>, the official successor to
       WHOIS, with the right server found through IANA's public list. Extensions without RDAP, such as
@@ -123,6 +138,7 @@ const STRINGS = {
     sub: "Alan adlarını yapıştırın (her satıra bir tane ya da virgül/boşlukla ayırarak). Kayıt ve bitiş tarihleri RDAP ile, gerekirse WHOIS ile sorgulanır.",
     run: "Alan adlarını kontrol et", csv: "CSV indir", xlsx: "Excel indir",
     sheet: "Alan adları",
+    themeGroup: "Tema", light: "Açık mod", dark: "Koyu mod", langGroup: "Dil",
     about: `<strong>Veriler hakkında:</strong> tarihler doğrudan her alan adının kayıt otoritesinden
       (uzantıyı yöneten kuruluş) alınır. Sorgular, WHOIS'in resmî halefi olan <a href="https://www.icann.org/rdap" target="_blank" rel="noopener">RDAP</a> ile
       yapılır; doğru sunucu IANA'nın herkese açık listesinden bulunur. RDAP desteği olmayan uzantılar,
@@ -157,6 +173,11 @@ function applyLang() {
   document.querySelectorAll("[data-i18n-html]").forEach((el) => el.innerHTML = t(el.dataset.i18nHtml));
   document.querySelectorAll(".lang button").forEach((b) =>
     b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  document.querySelector(".theme").setAttribute("aria-label", t("themeGroup"));
+  document.querySelector(".lang").setAttribute("aria-label", t("langGroup"));
+  document.querySelectorAll(".theme button").forEach((b) => {
+    b.title = t(b.dataset.theme); b.setAttribute("aria-label", t(b.dataset.theme));
+  });
   $("progress").textContent = progress ? t(...progress) : "";
   updateCount();
   render();
@@ -167,6 +188,21 @@ document.querySelectorAll(".lang button").forEach((b) => b.onclick = () => {
   try { localStorage.setItem("lang", lang); } catch {}
   applyLang();
 });
+
+// Theme: an explicit choice is stored; otherwise the system setting decides.
+const systemDark = matchMedia("(prefers-color-scheme: dark)");
+const currentTheme = () => document.documentElement.dataset.theme || (systemDark.matches ? "dark" : "light");
+function showTheme() {
+  document.querySelectorAll(".theme button").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.theme === currentTheme())));
+}
+document.querySelectorAll(".theme button").forEach((b) => b.onclick = () => {
+  document.documentElement.dataset.theme = b.dataset.theme;
+  try { localStorage.setItem("theme", b.dataset.theme); } catch {}
+  showTheme();
+});
+systemDark.addEventListener("change", showTheme);
+showTheme();
 
 function setProgress(...p) { progress = p; $("progress").textContent = t(...p); }
 
