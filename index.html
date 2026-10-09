@@ -33,6 +33,8 @@
   #progress, #count { color:var(--muted); font-size:13px; }
   #count.over { color:var(--bad); font-weight:600; }
   .bar.bottom { margin:12px 0 0; }
+  .note { color:var(--muted); font-size:13px; margin:28px 0 0; padding-top:16px; border-top:1px solid var(--line); }
+  .note a { color:var(--accent); }
   .wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:8px; }
   table { width:100%; border-collapse:collapse; font-size:13.5px; }
   th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
@@ -82,6 +84,8 @@
     <button id="xlsx" class="secondary" data-i18n="xlsx" disabled>Download Excel</button>
     <button id="csv" class="secondary" data-i18n="csv" disabled>Download CSV</button>
   </div>
+
+  <p class="note" data-i18n-html="about"></p>
 </main>
 
 <script>
@@ -94,6 +98,11 @@ const STRINGS = {
     sub: "Paste domains (one per line, or separated by commas/spaces). Shows registration and expiry dates via RDAP, with WHOIS fallback.",
     run: "Check domains", csv: "Download CSV", xlsx: "Download Excel",
     sheet: "Domains",
+    about: `<strong>About the data:</strong> dates come directly from each domain's registry, the
+      organization that runs the extension. Lookups use <a href="https://www.icann.org/rdap" target="_blank" rel="noopener">RDAP</a>, the official successor to
+      WHOIS, with the right server found through IANA's public list. Extensions without RDAP, such as
+      .tr (TRABİS), are queried over classic WHOIS instead. The Source column shows which method answered.
+      Results may be cached for up to an hour.`,
     count: (n, max) => `${n} / ${max} domains`,
     tooMany: (n, max) => `${n} domains: the limit is ${max} per check`,
     xlsxFailed: "Excel export could not be loaded. Try again or use CSV.",
@@ -111,6 +120,11 @@ const STRINGS = {
     sub: "Alan adlarını yapıştırın (her satıra bir tane ya da virgül/boşlukla ayırarak). Kayıt ve bitiş tarihleri RDAP ile, gerekirse WHOIS ile sorgulanır.",
     run: "Alan adlarını kontrol et", csv: "CSV indir", xlsx: "Excel indir",
     sheet: "Alan adları",
+    about: `<strong>Veriler hakkında:</strong> tarihler doğrudan her alan adının kayıt otoritesinden
+      (uzantıyı yöneten kuruluş) alınır. Sorgular, WHOIS'in resmî halefi olan <a href="https://www.icann.org/rdap" target="_blank" rel="noopener">RDAP</a> ile
+      yapılır; doğru sunucu IANA'nın herkese açık listesinden bulunur. RDAP desteği olmayan uzantılar,
+      örneğin .tr (TRABİS), klasik WHOIS ile sorgulanır. Hangi yöntemin kullanıldığı Kaynak sütununda
+      görünür. Sonuçlar en fazla bir saat önbellekte tutulabilir.`,
     count: (n, max) => `${n} / ${max} alan adı`,
     tooMany: (n, max) => `${n} alan adı: tek seferde en fazla ${max} kontrol edilebilir`,
     xlsxFailed: "Excel dışa aktarma yüklenemedi. Tekrar deneyin ya da CSV kullanın.",
@@ -136,6 +150,7 @@ function applyLang() {
   document.documentElement.lang = lang;
   document.title = t("pageTitle");
   document.querySelectorAll("[data-i18n]").forEach((el) => el.textContent = t(el.dataset.i18n));
+  document.querySelectorAll("[data-i18n-html]").forEach((el) => el.innerHTML = t(el.dataset.i18nHtml));
   document.querySelectorAll(".lang button").forEach((b) =>
     b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
   $("progress").textContent = progress ? t(...progress) : "";
