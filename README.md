@@ -24,6 +24,17 @@ Paste a list of domains and see each domain's registration date, expiry date, da
 - **Sortable table:** click any column header to sort; click again to reverse.
 - An "About the data" note on the page explains where the data comes from.
 
+## Run locally
+
+```bash
+npm run dev
+```
+
+Open http://localhost:3000. To use another port: `PORT=4000 npm run dev`.
+The server restarts by itself when files in `api/` change, and changes to `index.html` show up on a
+normal browser refresh. It only accepts connections from this computer.
+No `npm install` is needed: the project has no dependencies.
+
 ## Deploy to Vercel
 
 The project is connected to Vercel, so every push to `main` deploys automatically.
@@ -47,6 +58,7 @@ vercel --prod   # production URL
 
 - `index.html`: the page you use (all UI, translations and exports)
 - `api/whois.js`: serverless function, `GET /api/whois?domain=example.com`
+- `dev-server.js`: local server for `npm run dev` (left out of Vercel deploys by `.vercelignore`)
 
 ### API response
 

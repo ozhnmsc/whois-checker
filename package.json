@@ -3,5 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" }
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "node --watch-path=api --watch-path=dev-server.js dev-server.js"
+  }
 }
