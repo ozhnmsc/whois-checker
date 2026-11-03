@@ -1,6 +1,6 @@
-// Small Node server: serves index.html and runs the handlers in api/ with
-// Vercel-style req.query, res.status() and res.json().
-// Used by `npm run dev` locally and by `npm start` on Railway (not used on Vercel).
+// Node server: serves index.html and runs the handlers in api/ with
+// req.query, res.status() and res.json() helpers.
+// Used by `npm run dev` locally and by `npm start` on Railway.
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";

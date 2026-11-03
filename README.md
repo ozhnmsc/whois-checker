@@ -2,7 +2,7 @@
 
 Paste a list of domains and see each domain's registration date, expiry date, days left and registrar.
 
-**Live:** https://whois-check.vercel.app
+**Live:** https://whois-checker-production.up.railway.app
 
 ## Features
 
@@ -35,36 +35,20 @@ The server restarts by itself when files in `api/` change, and changes to `index
 normal browser refresh. It only accepts connections from this computer.
 No `npm install` is needed: the project has no dependencies.
 
-## Deploy to Vercel
-
-The project is connected to Vercel, so every push to `main` deploys automatically.
-
-To deploy a fresh copy:
-
-**Option A: Vercel website (no command line)**
-1. Push this folder to a GitHub repository.
-2. On vercel.com, choose **Add New → Project** and import the repository.
-3. Leave all settings at their defaults (Framework Preset: Other) and click **Deploy**.
-
-**Option B: Vercel CLI**
-```bash
-npm i -g vercel
-cd Whois-Checker
-vercel          # first deploy (preview)
-vercel --prod   # production URL
-```
-
 ## Deploy to Railway
 
+The project is connected to Railway, so every push to `main` deploys automatically.
+
+To deploy a fresh copy:
 1. On railway.com, choose **New Project → Deploy from GitHub repo** and pick this repository.
-2. Railway runs `npm start` (the Node server in `dev-server.js`, listening on Railway's `PORT`).
+2. Railway runs `npm start` (the Node server in `server.js`, listening on Railway's `PORT`).
 3. Open the service → **Settings → Networking → Generate Domain** to get a public URL.
 
 ## Files
 
 - `index.html`: the page you use (all UI, translations and exports)
-- `api/whois.js`: serverless function, `GET /api/whois?domain=example.com`
-- `dev-server.js`: Node server for `npm run dev` and `npm start` on Railway (left out of Vercel deploys by `.vercelignore`)
+- `api/whois.js`: lookup handler, `GET /api/whois?domain=example.com`
+- `server.js`: Node server that serves the page and the API (`npm run dev` locally, `npm start` on Railway)
 
 ### API response
 
@@ -89,9 +73,11 @@ WHOIS results also include the first 4,000 characters of the raw response in `ra
 ## Settings
 
 - **Domain limit:** `MAX_DOMAINS` in `index.html` (default 50).
-- **Cache time:** the `Cache-Control: s-maxage=3600` header in `api/whois.js` (seconds).
+- **Cache time:** `CACHE_MS` in `api/whois.js` (default one hour). The cache is in memory, so it
+  empties when the server restarts or redeploys.
 
 ## Optional: restrict access
 
-Anyone with the URL can use the app. To limit access, turn on
-**Settings → Deployment Protection** in your Vercel project.
+Anyone with the URL can use the app. Railway has no built-in password protection, so to limit
+access you would need to add a login check to `server.js` (for example HTTP basic auth with the
+password stored in a Railway variable).

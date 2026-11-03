@@ -1,9 +1,15 @@
-// Vercel serverless function: GET /api/whois?domain=example.com
+// API handler: GET /api/whois?domain=example.com
 // Tries RDAP first (structured JSON), then falls back to classic WHOIS on port 43
 // for TLDs without RDAP (e.g. some ccTLDs like .tr).
 import net from "node:net";
 
 let bootstrapCache = null;
+
+// Successful lookups are kept in memory for an hour. Cached results keep their
+// original queriedAt, so the page always shows when the registry really answered.
+const CACHE_MS = 60 * 60 * 1000;
+const CACHE_MAX = 5000;
+const resultCache = new Map();
 
 async function getRdapServer(tld) {
   if (!bootstrapCache) {
@@ -129,6 +135,9 @@ export default async function handler(req, res) {
   const domain = normalize(req.query.domain);
   if (!domain) return res.status(400).json({ error: "Invalid domain" });
 
+  const hit = resultCache.get(domain);
+  if (hit && Date.now() - hit.at < CACHE_MS) return res.status(200).json(hit.body);
+
   // Stamped when the registry is actually queried, so cached responses keep
   // their original time (useful as an audit trail).
   const queriedAt = new Date().toISOString();
@@ -136,8 +145,11 @@ export default async function handler(req, res) {
     let result = null;
     try { result = await viaRdap(domain); } catch { /* fall through */ }
     if (!result) result = await viaWhois(domain);
-    res.setHeader("Cache-Control", "s-maxage=3600");
-    return res.status(200).json({ ...result, queriedAt });
+    const body = { ...result, queriedAt };
+    resultCache.delete(domain);
+    resultCache.set(domain, { at: Date.now(), body });
+    if (resultCache.size > CACHE_MAX) resultCache.delete(resultCache.keys().next().value);
+    return res.status(200).json(body);
   } catch (e) {
     return res.status(200).json({ domain, error: e.message, queriedAt });
   }
