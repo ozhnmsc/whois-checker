@@ -1,6 +1,6 @@
-// Local development server (npm run dev). A small stand-in for Vercel:
-// serves index.html and runs the handlers in api/ with Vercel-style req.query,
-// res.status() and res.json(). Not used in production.
+// Small Node server: serves index.html and runs the handlers in api/ with
+// Vercel-style req.query, res.status() and res.json().
+// Used by `npm run dev` locally and by `npm start` on Railway (not used on Vercel).
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 
 const root = import.meta.dirname;
 const port = Number(process.env.PORT || 3000);
+const host = process.env.HOST || "localhost";
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${port}`);
@@ -31,4 +32,4 @@ http.createServer(async (req, res) => {
     res.statusCode = notFound ? 404 : 500;
     res.end(notFound ? "Not found" : String(e));
   }
-}).listen(port, "localhost", () => console.log(`Whois Checker running at http://localhost:${port}`));
+}).listen(port, host, () => console.log(`Whois Checker running at http://${host}:${port}`));

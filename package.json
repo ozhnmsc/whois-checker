@@ -5,6 +5,7 @@
   "type": "module",
   "engines": { "node": "24.x" },
   "scripts": {
-    "dev": "node --watch-path=api --watch-path=dev-server.js dev-server.js"
+    "dev": "node --watch-path=api --watch-path=dev-server.js dev-server.js",
+    "start": "HOST=0.0.0.0 node dev-server.js"
   }
 }

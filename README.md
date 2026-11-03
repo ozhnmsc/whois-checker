@@ -54,11 +54,17 @@ vercel          # first deploy (preview)
 vercel --prod   # production URL
 ```
 
+## Deploy to Railway
+
+1. On railway.com, choose **New Project → Deploy from GitHub repo** and pick this repository.
+2. Railway runs `npm start` (the Node server in `dev-server.js`, listening on Railway's `PORT`).
+3. Open the service → **Settings → Networking → Generate Domain** to get a public URL.
+
 ## Files
 
 - `index.html`: the page you use (all UI, translations and exports)
 - `api/whois.js`: serverless function, `GET /api/whois?domain=example.com`
-- `dev-server.js`: local server for `npm run dev` (left out of Vercel deploys by `.vercelignore`)
+- `dev-server.js`: Node server for `npm run dev` and `npm start` on Railway (left out of Vercel deploys by `.vercelignore`)
 
 ### API response
 
